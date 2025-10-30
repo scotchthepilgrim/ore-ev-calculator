@@ -11,7 +11,6 @@ A browser console script that calculates and displays Expected Value (EV) for OR
 
 ## How to Use
 
-```
 1. **Go to https://ore.supply/**
 2. **Open Developer Console**:
    - Chrome/Edge: Press `F12` or `Ctrl+Shift+J` (Windows/Linux) / `Cmd+Option+J` (Mac)
