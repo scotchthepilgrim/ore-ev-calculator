@@ -11,7 +11,8 @@ A browser console script that calculates and displays Expected Value (EV) for OR
 
 ## How to Use
 
-1. **Open the [ORE mining game](https://ore.supply/)** in your browser
+```
+1. **Go to https://ore.supply/**
 2. **Open Developer Console**:
    - Chrome/Edge: Press `F12` or `Ctrl+Shift+J` (Windows/Linux) / `Cmd+Option+J` (Mac)
    - Firefox: Press `F12` or `Ctrl+Shift+K` (Windows/Linux) / `Cmd+Option+K` (Mac)
