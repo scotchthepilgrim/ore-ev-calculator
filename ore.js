@@ -51,7 +51,10 @@
     totalStaked: 0,
     totalWon: 0,
     actualWinRate: P_WIN,
-    lastUpdated: Date.now()
+    lastUpdated: Date.now(),
+    recentRounds: [],  // Store last 10 rounds
+    lastWinningBlock: null,
+    lastRoundWon: false
   };
 
   // ---------- Auto-Select Toggle Button ----------
@@ -151,13 +154,64 @@
     multiBlockRow.appendChild(multiOnButton);
     container.appendChild(multiBlockRow);
 
+    // Create stats display row
+    const statsRow = document.createElement('div');
+    statsRow.id = 'ore-ev-stats-display';
+    statsRow.className = 'flex flex-col gap-1 px-2 py-2 border-t border-gray-800 text-xs';
+    statsRow.innerHTML = `
+      <div class="flex justify-between items-center">
+        <span class="text-gray-400">Last Round:</span>
+        <span id="ore-ev-last-result" class="font-semibold">Waiting...</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span class="text-gray-400">Session Win Rate:</span>
+        <span id="ore-ev-win-rate" class="font-semibold text-gray-300">0/0 (0%)</span>
+      </div>
+      <div id="ore-ev-recent-history" class="text-center text-gray-500 mt-1">
+        No rounds yet
+      </div>
+    `;
+    container.appendChild(statsRow);
+
     // Insert after deploy button's parent
     deployButton.parentElement.parentElement.appendChild(container);
 
     updateToggleButton();
+    updateStatsDisplay();
     return container;
   }
   
+  function updateStatsDisplay() {
+    const lastResultEl = document.getElementById('ore-ev-last-result');
+    const winRateEl = document.getElementById('ore-ev-win-rate');
+    const historyEl = document.getElementById('ore-ev-recent-history');
+
+    if (!lastResultEl || !winRateEl || !historyEl) return;
+
+    // Update last round result
+    if (performance.recentRounds.length > 0) {
+      const lastRound = performance.recentRounds[0];
+      const emoji = lastRound.won ? '✅' : '❌';
+      const color = lastRound.won ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)';
+      const text = lastRound.won ? 'WON' : 'LOST';
+      lastResultEl.innerHTML = `<span style="color: ${color}">${emoji} ${text} - Block #${lastRound.winningBlock}</span>`;
+    }
+
+    // Update win rate
+    if (performance.roundsPlayed > 0) {
+      const winPercentage = (performance.roundsWon / performance.roundsPlayed * 100).toFixed(1);
+      const color = winPercentage >= 50 ? 'rgb(34, 197, 94)' : winPercentage >= 25 ? 'rgb(234, 179, 8)' : 'rgb(239, 68, 68)';
+      winRateEl.innerHTML = `<span style="color: ${color}">${performance.roundsWon}/${performance.roundsPlayed} (${winPercentage}%)</span>`;
+    }
+
+    // Update history (last 10 rounds)
+    if (performance.recentRounds.length > 0) {
+      const history = performance.recentRounds.slice(0, 10).map(r => r.won ? '✅' : '❌').join(' ');
+      historyEl.textContent = history;
+      historyEl.className = 'text-center mt-1 text-sm';
+    }
+  }
+
   function updateToggleButton() {
     const offButton = document.getElementById('ore-ev-toggle-off');
     const onButton = document.getElementById('ore-ev-toggle-on');
@@ -300,6 +354,36 @@
       if (btns.length === 25) return Array.from(btns);
     }
     return [];
+  }
+
+  function detectWinningBlock() {
+    const btns = selectGridButtons();
+    if (btns.length !== 25) return null;
+
+    // Try to detect winning block by looking for visual indicators
+    // Common indicators: checkmark, different background, "winner" class, etc.
+    for (let i = 0; i < btns.length; i++) {
+      const btn = btns[i];
+
+      // Check for various winning indicators
+      const hasCheckmark = btn.textContent.includes('✓') || btn.textContent.includes('✔');
+      const hasWinnerClass = btn.className.includes('winner') || btn.className.includes('selected');
+      const hasGreenBg = btn.className.includes('bg-green') || btn.className.includes('bg-success');
+
+      // Check if button is disabled (common for winning block)
+      const isDisabled = btn.disabled;
+
+      // Check for specific text patterns
+      const hasWinText = btn.textContent.toLowerCase().includes('win') ||
+                         btn.textContent.toLowerCase().includes('won');
+
+      if (hasCheckmark || hasWinnerClass || hasGreenBg || (isDisabled && hasWinText)) {
+        const blockNum = parseBlockNumber(btn);
+        return blockNum !== null ? blockNum : i;
+      }
+    }
+
+    return null;
   }
 
   function parseRoundNumber() {
@@ -598,6 +682,48 @@
   
       if (lastRoundNumber !== null && currentRoundNumber !== null) {
         if (currentRoundNumber !== lastRoundNumber) {
+          // Try to detect winning block before round resets
+          const winningBlock = detectWinningBlock();
+
+          if (winningBlock !== null) {
+            // Check if we had this block selected
+            const selectedBlocks = Array.isArray(lastSelectedButton)
+              ? lastSelectedButton.map(btn => parseBlockNumber(btn)).filter(n => n !== null)
+              : lastSelectedButton ? [parseBlockNumber(lastSelectedButton)].filter(n => n !== null) : [];
+
+            const didWin = selectedBlocks.includes(winningBlock);
+
+            // Update performance tracking
+            performance.roundsPlayed++;
+            if (didWin) performance.roundsWon++;
+            performance.actualWinRate = performance.roundsWon / performance.roundsPlayed;
+
+            // Add to recent rounds (keep last 10)
+            performance.recentRounds.unshift({
+              roundNumber: lastRoundNumber,
+              winningBlock,
+              won: didWin,
+              selectedBlocks: [...selectedBlocks]
+            });
+            if (performance.recentRounds.length > 10) {
+              performance.recentRounds.pop();
+            }
+
+            // Update historical data
+            if (historicalData.enabled && winningBlock < 25) {
+              historicalData.blockWins[winningBlock]++;
+            }
+
+            // Log result
+            const emoji = didWin ? '✅ 🎉' : '❌';
+            const result = didWin ? 'WON' : 'LOST';
+            console.log(`${emoji} Round #${lastRoundNumber} ${result}! Winning block: #${winningBlock}`);
+            console.log(`   Selected: [${selectedBlocks.join(', ')}] | Win Rate: ${(performance.actualWinRate * 100).toFixed(1)}% (${performance.roundsWon}/${performance.roundsPlayed})`);
+
+            // Update UI
+            updateStatsDisplay();
+          }
+
           console.log(`🔄 Round reset detected! Round #${lastRoundNumber} → #${currentRoundNumber}`);
           clearOldHighlights();
           roundResetTime = Date.now();
@@ -798,7 +924,17 @@
     console.log(`   Rounds won: ${performance.roundsWon}`);
     if (performance.roundsPlayed > 0) {
       console.log(`   Actual win rate: ${(performance.actualWinRate * 100).toFixed(2)}%`);
-      console.log(`   Expected win rate: ${(P_WIN * 100).toFixed(2)}%`);
+      const expectedRate = MULTI_BLOCK_CONFIG.enabled ? MULTI_BLOCK_CONFIG.maxBlocks * P_WIN : P_WIN;
+      console.log(`   Expected win rate: ${(expectedRate * 100).toFixed(2)}%`);
+    }
+
+    if (performance.recentRounds.length > 0) {
+      console.log(`\n🎯 Recent Rounds (Last ${Math.min(10, performance.recentRounds.length)}):`);
+      performance.recentRounds.forEach((round, i) => {
+        const emoji = round.won ? '✅' : '❌';
+        const status = round.won ? 'WON ' : 'LOST';
+        console.log(`   ${emoji} Round #${round.roundNumber}: ${status} - Winner: Block #${round.winningBlock} | Selected: [${round.selectedBlocks.join(', ')}]`);
+      });
     }
 
     if (historicalData.totalRounds >= 25) {
@@ -855,13 +991,20 @@
   console.log('🚀 ORE EV Calculator - Enhanced Edition');
   console.log('═══════════════════════════════════════════════');
   console.log('✅ Live prices from DexScreener (15s updates)');
-  console.log('✅ Multi-block staking support');
-  console.log('✅ Historical data tracking');
+  console.log('✅ Multi-block staking: 13 blocks = 52% WIN RATE');
+  console.log('✅ Real-time win tracking with emojis');
+  console.log('✅ Historical data & performance analytics');
   console.log('✅ Auto-select toggle');
+  console.log('\n📊 UI Features:');
+  console.log('   • Last round result with ✅/❌ emoji');
+  console.log('   • Session win rate percentage');
+  console.log('   • Recent 10 rounds history');
   console.log('\n📋 Available commands:');
-  console.log('   oreEvStats()  - View statistics');
+  console.log('   oreEvStats()  - View detailed statistics');
   console.log('   oreEvConfig() - Configure settings');
   console.log('   oreEvStop()   - Stop calculator');
-  console.log('\n💡 Example: oreEvConfig({ multiBlock: true, maxBlocks: 3 })');
+  console.log('\n💡 Examples:');
+  console.log('   oreEvConfig({ maxBlocks: 5 })  // 20% win rate');
+  console.log('   oreEvConfig({ maxBlocks: 13 }) // 52% win rate');
   console.log('═══════════════════════════════════════════════\n');
 })();
