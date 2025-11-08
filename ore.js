@@ -30,8 +30,8 @@
 
   // ---------- Multi-Block Staking Config ----------
   const MULTI_BLOCK_CONFIG = {
-    enabled: false,           // Toggle multi-block staking
-    maxBlocks: 3,             // Stake on top N blocks (increases win rate to N * 4%)
+    enabled: true,            // Toggle multi-block staking (ON for 50% win rate)
+    maxBlocks: 13,            // Stake on top N blocks (13 blocks = 52% win rate)
     minEVThreshold: 0.0001    // Only stake if EV > threshold
   };
 
@@ -470,7 +470,8 @@
     // Add rank badge for top blocks
     let displayText = formatSol(evValue);
     if (isTopMulti && MULTI_BLOCK_CONFIG.enabled) {
-      const rankBadge = ['①', '②', '③', '④', '⑤'][rank] || `#${rank + 1}`;
+      const badges = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮'];
+      const rankBadge = badges[rank] || `#${rank + 1}`;
       displayText = `${rankBadge} ${displayText}`;
     }
 
