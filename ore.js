@@ -28,6 +28,32 @@
   let autoSelectEnabled = false;
   let lastSelectedButton = null;
 
+  // ---------- Multi-Block Staking Config ----------
+  const MULTI_BLOCK_CONFIG = {
+    enabled: false,           // Toggle multi-block staking
+    maxBlocks: 3,             // Stake on top N blocks (increases win rate to N * 4%)
+    minEVThreshold: 0.0001    // Only stake if EV > threshold
+  };
+
+  // ---------- Historical Data Tracking ----------
+  const historicalData = {
+    blockWins: new Array(25).fill(0),  // Track wins per block position (0-24)
+    totalRounds: 0,
+    lastRoundTracked: null,
+    enabled: true,  // Set to false to disable tracking
+    hotBlockThreshold: 1.5  // Block wins 50% more than expected = "hot"
+  };
+
+  // ---------- Performance Tracking ----------
+  const performance = {
+    roundsPlayed: 0,
+    roundsWon: 0,
+    totalStaked: 0,
+    totalWon: 0,
+    actualWinRate: P_WIN,
+    lastUpdated: Date.now()
+  };
+
   // ---------- Auto-Select Toggle Button ----------
   function createToggleButton() {
     // Remove existing button if any
@@ -82,14 +108,52 @@
       }
     });
   
-    // Assemble
+    // Assemble auto-select row
     toggleRow.appendChild(offButton);
     toggleRow.appendChild(onButton);
     container.appendChild(toggleRow);
-  
+
+    // Create multi-block staking row
+    const multiBlockRow = document.createElement('div');
+    multiBlockRow.className = 'flex flex-row gap-2 px-2 py-2 border-t border-gray-800';
+
+    // Create multi-block OFF button
+    const multiOffButton = document.createElement('button');
+    multiOffButton.id = 'ore-ev-multi-off';
+    multiOffButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm';
+    multiOffButton.textContent = `Multi-Block: OFF`;
+
+    // Create multi-block ON button
+    const multiOnButton = document.createElement('button');
+    multiOnButton.id = 'ore-ev-multi-on';
+    multiOnButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm';
+    multiOnButton.textContent = `Multi (${MULTI_BLOCK_CONFIG.maxBlocks}): ON`;
+
+    // Add click handlers for multi-block
+    multiOffButton.addEventListener('click', () => {
+      if (MULTI_BLOCK_CONFIG.enabled) {
+        MULTI_BLOCK_CONFIG.enabled = false;
+        updateToggleButton();
+        console.log('📊 Multi-block staking DISABLED (single block mode)');
+      }
+    });
+
+    multiOnButton.addEventListener('click', () => {
+      if (!MULTI_BLOCK_CONFIG.enabled) {
+        MULTI_BLOCK_CONFIG.enabled = true;
+        updateToggleButton();
+        console.log(`📊 Multi-block staking ENABLED (top ${MULTI_BLOCK_CONFIG.maxBlocks} blocks, ${MULTI_BLOCK_CONFIG.maxBlocks * 4}% win rate)`);
+      }
+    });
+
+    // Assemble multi-block row
+    multiBlockRow.appendChild(multiOffButton);
+    multiBlockRow.appendChild(multiOnButton);
+    container.appendChild(multiBlockRow);
+
     // Insert after deploy button's parent
     deployButton.parentElement.parentElement.appendChild(container);
-  
+
     updateToggleButton();
     return container;
   }
@@ -97,9 +161,12 @@
   function updateToggleButton() {
     const offButton = document.getElementById('ore-ev-toggle-off');
     const onButton = document.getElementById('ore-ev-toggle-on');
-    
+    const multiOffButton = document.getElementById('ore-ev-multi-off');
+    const multiOnButton = document.getElementById('ore-ev-multi-on');
+
     if (!offButton || !onButton) return;
-  
+
+    // Update auto-select buttons
     if (autoSelectEnabled) {
       // ON state
       offButton.style.cssText = `
@@ -108,7 +175,7 @@
         cursor: pointer;
       `;
       offButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm text-elements-lowEmphasis hover:text-elements-midEmphasis hover:bg-surface-floating';
-      
+
       onButton.style.cssText = `
         color: rgb(34, 197, 94);
         background-color: rgba(34, 197, 94, 0.1);
@@ -125,13 +192,50 @@
         border: 1px solid rgb(239, 68, 68);
       `;
       offButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm';
-      
+
       onButton.style.cssText = `
         color: rgb(156, 163, 175);
         background-color: transparent;
         cursor: pointer;
       `;
       onButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm text-elements-lowEmphasis hover:text-elements-midEmphasis hover:bg-surface-floating';
+    }
+
+    // Update multi-block buttons
+    if (multiOffButton && multiOnButton) {
+      if (MULTI_BLOCK_CONFIG.enabled) {
+        // Multi-block ON state
+        multiOffButton.style.cssText = `
+          color: rgb(156, 163, 175);
+          background-color: transparent;
+          cursor: pointer;
+        `;
+        multiOffButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm text-elements-lowEmphasis hover:text-elements-midEmphasis hover:bg-surface-floating';
+
+        multiOnButton.style.cssText = `
+          color: rgb(59, 130, 246);
+          background-color: rgba(59, 130, 246, 0.1);
+          cursor: default;
+          border: 1px solid rgb(59, 130, 246);
+        `;
+        multiOnButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm';
+      } else {
+        // Multi-block OFF state
+        multiOffButton.style.cssText = `
+          color: rgb(156, 163, 175);
+          background-color: rgba(156, 163, 175, 0.1);
+          cursor: default;
+          border: 1px solid rgb(107, 114, 128);
+        `;
+        multiOffButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm';
+
+        multiOnButton.style.cssText = `
+          color: rgb(156, 163, 175);
+          background-color: transparent;
+          cursor: pointer;
+        `;
+        multiOnButton.className = 'flex-1 py-1 h-min transition-colors rounded-lg font-semibold text-sm text-elements-lowEmphasis hover:text-elements-midEmphasis hover:bg-surface-floating';
+      }
     }
   }
 
@@ -320,23 +424,35 @@
     lastHighlightedEV = null;
   }
   
-  function showEV(btn, evValue, isHighest) {
+  function showEV(btn, evValue, rank) {
+    // rank: 0 = best, 1 = 2nd best, 2 = 3rd best, etc., null = not in top
     if (getComputedStyle(btn).position === 'static') {
       btn.style.position = 'relative';
     }
-  
+
+    const isHighest = rank === 0;
+    const isTopMulti = rank !== null && rank >= 0 && rank < MULTI_BLOCK_CONFIG.maxBlocks;
+
     if (isHighest) {
       btn.classList.add('ore-ev-highlighted');
       btn.style.boxShadow = '0 0 0 3px rgba(0,255,0,0.95) inset, 0 0 10px rgba(0,255,0,0.5)';
       btn.style.borderColor = 'rgba(0,255,0,0.95)';
+    } else if (isTopMulti) {
+      // 2nd and 3rd best blocks get blue highlight
+      btn.classList.add('ore-ev-highlighted');
+      btn.style.boxShadow = '0 0 0 2px rgba(59,130,246,0.8) inset, 0 0 6px rgba(59,130,246,0.3)';
+      btn.style.borderColor = 'rgba(59,130,246,0.8)';
     }
-  
+
     let overlay = document.createElement('div');
     overlay.className = 'ore-ev-overlay';
-    
+
     let textColor, fontWeight;
     if (isHighest && evValue > 0) {
       textColor = '#2dff2d';
+      fontWeight = '700';
+    } else if (isTopMulti && evValue > 0) {
+      textColor = '#3b82f6';  // Blue for 2nd/3rd best
       fontWeight = '700';
     } else if (evValue < 0) {
       textColor = '#ff6b6b';
@@ -348,9 +464,16 @@
       textColor = '#cccccc';
       fontWeight = '600';
     }
-    
+
     const bgOpacity = isHighest ? '0.90' : '0.80';
-    
+
+    // Add rank badge for top blocks
+    let displayText = formatSol(evValue);
+    if (isTopMulti && MULTI_BLOCK_CONFIG.enabled) {
+      const rankBadge = ['①', '②', '③', '④', '⑤'][rank] || `#${rank + 1}`;
+      displayText = `${rankBadge} ${displayText}`;
+    }
+
     overlay.style.cssText = `
       position: absolute;
       left: 50%;
@@ -368,7 +491,7 @@
       z-index: 1000;
       line-height: 1.2;
     `;
-    overlay.textContent = `${formatSol(evValue)}`;
+    overlay.textContent = displayText;
     btn.appendChild(overlay);
   }
 
@@ -398,7 +521,7 @@
 
   function autoSelectBestButton(bestButton) {
     if (!autoSelectEnabled || !bestButton) return;
-    
+
     // If there's a different button that was previously selected, deselect it first
     if (lastSelectedButton && lastSelectedButton !== bestButton) {
       try {
@@ -408,7 +531,7 @@
         console.error('Error deselecting previous button:', e);
       }
     }
-    
+
     // Select the new best button (or keep it selected if it's the same)
     if (lastSelectedButton !== bestButton) {
       try {
@@ -418,6 +541,47 @@
       } catch (e) {
         console.error('Error auto-selecting button:', e);
       }
+    }
+  }
+
+  function autoSelectMultipleBlocks(topBlocks) {
+    if (!autoSelectEnabled || !topBlocks || topBlocks.length === 0) return;
+
+    const currentlySelected = Array.isArray(lastSelectedButton) ? lastSelectedButton : [lastSelectedButton].filter(Boolean);
+    const newSelections = topBlocks.map(b => b.btn);
+
+    // Deselect blocks that are no longer in top N
+    currentlySelected.forEach(btn => {
+      if (!newSelections.includes(btn)) {
+        try {
+          btn.click();  // Deselect
+          console.log(`🔄 Deselected block (no longer in top ${MULTI_BLOCK_CONFIG.maxBlocks})`);
+        } catch (e) {
+          console.error('Error deselecting button:', e);
+        }
+      }
+    });
+
+    // Select new top blocks
+    const finalSelections = [];
+    topBlocks.forEach((block, index) => {
+      if (!currentlySelected.includes(block.btn)) {
+        try {
+          block.btn.click();
+          console.log(`🎯 Auto-selected block #${block.blockNum} (rank ${index + 1}, EV: ${formatSol(block.EV)})`);
+        } catch (e) {
+          console.error('Error selecting button:', e);
+        }
+      }
+      finalSelections.push(block.btn);
+      block.btn._evValue = block.EV;
+    });
+
+    lastSelectedButton = finalSelections;
+
+    if (topBlocks.length > 0) {
+      const totalWinRate = topBlocks.length * P_WIN * 100;
+      console.log(`📊 Multi-block: ${topBlocks.length} blocks selected (${totalWinRate.toFixed(1)}% combined win rate)`);
     }
   }
 
@@ -438,7 +602,7 @@
           roundResetTime = Date.now();
           isInCooldown = true;
           lastRoundNumber = currentRoundNumber;
-          lastSelectedButton = null;
+          lastSelectedButton = MULTI_BLOCK_CONFIG.enabled ? [] : null;  // Reset selections
           return;
         }
       }
@@ -495,19 +659,75 @@
         }
       }
   
+      // Sort blocks by EV for ranking
+      const sortedBlocks = validBlocks
+        .filter(b => isFinite(b.EV))
+        .sort((a, b) => b.EV - a.EV);
+
+      // Create a rank map
+      const rankMap = new Map();
+      sortedBlocks.forEach((block, index) => {
+        rankMap.set(block.btn, index);
+      });
+
+      // Display EV with rank indicators
       for (const b of validBlocks) {
-        const isHighest = (best && b === best && b.EV > 0);
-        showEV(b.btn, b.EV, isHighest);
-        
-        if (isHighest) {
+        const rank = rankMap.get(b.btn);
+        showEV(b.btn, b.EV, rank);
+
+        if (rank === 0) {
           b.btn._evValue = b.EV;
         }
       }
 
-      if (best && best.EV > 0) {
-        autoSelectBestButton(best.btn);
+      // Multi-block or single-block selection
+      if (MULTI_BLOCK_CONFIG.enabled) {
+        // Get top N blocks with positive EV
+        const topBlocks = sortedBlocks
+          .filter(b => b.EV > MULTI_BLOCK_CONFIG.minEVThreshold)
+          .slice(0, MULTI_BLOCK_CONFIG.maxBlocks);
+
+        if (topBlocks.length > 0) {
+          autoSelectMultipleBlocks(topBlocks);
+        }
+      } else {
+        // Single block mode (original behavior)
+        if (best && best.EV > 0) {
+          autoSelectBestButton(best.btn);
+        }
       }
-  
+
+      // Update historical data tracking every 10 rounds
+      if (historicalData.enabled && currentRoundNumber !== null) {
+        if (historicalData.lastRoundTracked !== currentRoundNumber) {
+          historicalData.totalRounds++;
+          historicalData.lastRoundTracked = currentRoundNumber;
+
+          // Every 50 rounds, show hot block statistics
+          if (historicalData.totalRounds % 50 === 0) {
+            console.log(`📊 Historical Data (${historicalData.totalRounds} rounds tracked):`);
+            const hotBlocks = historicalData.blockWins
+              .map((wins, idx) => ({
+                block: idx,
+                wins,
+                rate: wins / historicalData.totalRounds,
+                expectedRate: P_WIN
+              }))
+              .filter(b => b.rate > P_WIN * historicalData.hotBlockThreshold)
+              .sort((a, b) => b.rate - a.rate);
+
+            if (hotBlocks.length > 0) {
+              console.log(`  🔥 Hot blocks (win > ${(P_WIN * historicalData.hotBlockThreshold * 100).toFixed(1)}%):`);
+              hotBlocks.slice(0, 5).forEach(b => {
+                console.log(`     Block #${b.block}: ${(b.rate * 100).toFixed(1)}% (${b.wins} wins)`);
+              });
+            } else {
+              console.log(`  ℹ️ No significant patterns detected yet (need more data)`);
+            }
+          }
+        }
+      }
+
     } catch (e) {
       console.error('EV highlighter error:', e);
     }
@@ -544,14 +764,103 @@
     window.__oreEvInterval = null;
     window.__orePriceInterval = null;
     clearOldHighlights();
-    
+
     const toggleContainer = document.getElementById('ore-ev-auto-select-container');
     if (toggleContainer) toggleContainer.remove();
-    
+
     console.log('ORE EV highlighter stopped.');
   };
 
-  console.log('🚀 ORE EV highlighter running with live prices from DexScreener!');
-  console.log('📊 Prices update every 15 seconds. Call oreEvStop() to stop.');
-  console.log('🎯 Auto-select toggle will appear below the Deploy button!');
+  // Expose stats function
+  window.oreEvStats = () => {
+    console.log('═══════════════════════════════════════════════');
+    console.log('📊 ORE EV Calculator - Statistics Report');
+    console.log('═══════════════════════════════════════════════');
+    console.log(`\n💰 Current Prices:`);
+    console.log(`   ORE: $${PRICE_ORE_USD.toFixed(2)}`);
+    console.log(`   SOL: $${PRICE_SOL_USD.toFixed(2)}`);
+    console.log(`   Ratio: ${priceOreSol.toFixed(6)} ORE/SOL`);
+
+    console.log(`\n⚙️  Configuration:`);
+    console.log(`   Auto-select: ${autoSelectEnabled ? 'ON ✅' : 'OFF ❌'}`);
+    console.log(`   Multi-block: ${MULTI_BLOCK_CONFIG.enabled ? 'ON ✅' : 'OFF ❌'}`);
+    if (MULTI_BLOCK_CONFIG.enabled) {
+      console.log(`   Blocks selected: ${MULTI_BLOCK_CONFIG.maxBlocks}`);
+      console.log(`   Combined win rate: ${(MULTI_BLOCK_CONFIG.maxBlocks * P_WIN * 100).toFixed(1)}%`);
+    } else {
+      console.log(`   Win rate: ${(P_WIN * 100).toFixed(1)}% (single block)`);
+    }
+
+    console.log(`\n📈 Performance:`);
+    console.log(`   Rounds tracked: ${historicalData.totalRounds}`);
+    console.log(`   Rounds played: ${performance.roundsPlayed}`);
+    console.log(`   Rounds won: ${performance.roundsWon}`);
+    if (performance.roundsPlayed > 0) {
+      console.log(`   Actual win rate: ${(performance.actualWinRate * 100).toFixed(2)}%`);
+      console.log(`   Expected win rate: ${(P_WIN * 100).toFixed(2)}%`);
+    }
+
+    if (historicalData.totalRounds >= 25) {
+      console.log(`\n🔥 Hot Blocks (Top 5):`);
+      const topBlocks = historicalData.blockWins
+        .map((wins, idx) => ({ block: idx, wins, rate: wins / historicalData.totalRounds }))
+        .sort((a, b) => b.wins - a.wins)
+        .slice(0, 5);
+
+      topBlocks.forEach((b, i) => {
+        const isHot = b.rate > P_WIN * historicalData.hotBlockThreshold;
+        const marker = isHot ? '🔥' : '  ';
+        console.log(`   ${marker} #${i + 1}. Block #${b.block}: ${b.wins} wins (${(b.rate * 100).toFixed(1)}%)`);
+      });
+    }
+
+    console.log('\n═══════════════════════════════════════════════');
+    console.log('💡 Tip: Adjust MULTI_BLOCK_CONFIG.maxBlocks to trade win rate for profit');
+    console.log('═══════════════════════════════════════════════\n');
+  };
+
+  // Expose config helper
+  window.oreEvConfig = (options) => {
+    if (options.multiBlock !== undefined) {
+      MULTI_BLOCK_CONFIG.enabled = options.multiBlock;
+      console.log(`Multi-block staking ${options.multiBlock ? 'ENABLED' : 'DISABLED'}`);
+      updateToggleButton();
+    }
+    if (options.maxBlocks !== undefined) {
+      MULTI_BLOCK_CONFIG.maxBlocks = Math.max(1, Math.min(25, options.maxBlocks));
+      console.log(`Max blocks set to: ${MULTI_BLOCK_CONFIG.maxBlocks} (${MULTI_BLOCK_CONFIG.maxBlocks * 4}% win rate)`);
+      updateToggleButton();
+    }
+    if (options.autoSelect !== undefined) {
+      autoSelectEnabled = options.autoSelect;
+      console.log(`Auto-select ${options.autoSelect ? 'ENABLED' : 'DISABLED'}`);
+      updateToggleButton();
+    }
+    if (options.minEV !== undefined) {
+      MULTI_BLOCK_CONFIG.minEVThreshold = options.minEV;
+      console.log(`Min EV threshold set to: ${options.minEV}`);
+    }
+
+    console.log('\nCurrent config:');
+    console.log(JSON.stringify({
+      autoSelect: autoSelectEnabled,
+      multiBlock: MULTI_BLOCK_CONFIG.enabled,
+      maxBlocks: MULTI_BLOCK_CONFIG.maxBlocks,
+      minEV: MULTI_BLOCK_CONFIG.minEVThreshold
+    }, null, 2));
+  };
+
+  console.log('═══════════════════════════════════════════════');
+  console.log('🚀 ORE EV Calculator - Enhanced Edition');
+  console.log('═══════════════════════════════════════════════');
+  console.log('✅ Live prices from DexScreener (15s updates)');
+  console.log('✅ Multi-block staking support');
+  console.log('✅ Historical data tracking');
+  console.log('✅ Auto-select toggle');
+  console.log('\n📋 Available commands:');
+  console.log('   oreEvStats()  - View statistics');
+  console.log('   oreEvConfig() - Configure settings');
+  console.log('   oreEvStop()   - Stop calculator');
+  console.log('\n💡 Example: oreEvConfig({ multiBlock: true, maxBlocks: 3 })');
+  console.log('═══════════════════════════════════════════════\n');
 })();
