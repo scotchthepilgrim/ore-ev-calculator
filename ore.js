@@ -32,7 +32,11 @@
   const MULTI_BLOCK_CONFIG = {
     enabled: true,            // Toggle multi-block staking (ON for 50% win rate)
     maxBlocks: 13,            // Stake on top N blocks (13 blocks = 52% win rate)
-    minEVThreshold: 0.0001    // Only stake if EV > threshold
+    minEVThreshold: 0.01,     // Only stake if EV > 0.01 SOL (improved filtering)
+    smartSelection: true,     // Enable intelligent block selection
+    budgetLimit: null,        // Set to your SOL budget (null = no limit)
+    minEVPercentage: 0.02,    // Minimum 2% return on stake (EV/stake ratio)
+    adaptiveMode: true        // Auto-adjust block count based on quality
   };
 
   // ---------- Historical Data Tracking ----------
@@ -809,13 +813,60 @@
 
       // Multi-block or single-block selection
       if (MULTI_BLOCK_CONFIG.enabled) {
-        // Get top N blocks with positive EV
-        const topBlocks = sortedBlocks
-          .filter(b => b.EV > MULTI_BLOCK_CONFIG.minEVThreshold)
-          .slice(0, MULTI_BLOCK_CONFIG.maxBlocks);
+        // Smart block selection with improved filtering
+        let candidateBlocks = sortedBlocks.filter(b => {
+          // Filter 1: Minimum EV threshold
+          if (b.EV <= MULTI_BLOCK_CONFIG.minEVThreshold) return false;
+
+          // Filter 2: Minimum EV percentage (ROI)
+          if (MULTI_BLOCK_CONFIG.smartSelection && b.O > 0) {
+            const evPercentage = b.EV / b.O;
+            if (evPercentage < MULTI_BLOCK_CONFIG.minEVPercentage) return false;
+          }
+
+          return true;
+        });
+
+        // Budget-aware selection
+        if (MULTI_BLOCK_CONFIG.budgetLimit !== null && MULTI_BLOCK_CONFIG.budgetLimit > 0) {
+          let totalCost = 0;
+          const affordableBlocks = [];
+
+          for (const block of candidateBlocks) {
+            const stakeCost = block.y || block.O || 0;
+            if (totalCost + stakeCost <= MULTI_BLOCK_CONFIG.budgetLimit) {
+              affordableBlocks.push(block);
+              totalCost += stakeCost;
+            }
+          }
+
+          candidateBlocks = affordableBlocks;
+          console.log(`💰 Budget-aware: Selected ${candidateBlocks.length} blocks within ${MULTI_BLOCK_CONFIG.budgetLimit} SOL budget (total: ${totalCost.toFixed(2)} SOL)`);
+        }
+
+        // Adaptive mode: adjust block count based on quality
+        let targetBlocks = MULTI_BLOCK_CONFIG.maxBlocks;
+        if (MULTI_BLOCK_CONFIG.adaptiveMode && candidateBlocks.length > 0) {
+          // If we have fewer quality blocks than maxBlocks, use what we have
+          if (candidateBlocks.length < MULTI_BLOCK_CONFIG.maxBlocks) {
+            targetBlocks = candidateBlocks.length;
+            console.log(`🎯 Adaptive: Only ${targetBlocks} blocks meet quality criteria (reduced from ${MULTI_BLOCK_CONFIG.maxBlocks})`);
+          }
+
+          // Additional quality check: if average EV drops significantly, reduce count
+          const avgEV = candidateBlocks.slice(0, targetBlocks).reduce((sum, b) => sum + b.EV, 0) / targetBlocks;
+          if (avgEV < MULTI_BLOCK_CONFIG.minEVThreshold * 2 && targetBlocks > 5) {
+            targetBlocks = Math.max(5, Math.floor(targetBlocks * 0.6));
+            console.log(`⚠️ Adaptive: Low average EV (${formatSol(avgEV)}), reducing to ${targetBlocks} blocks`);
+          }
+        }
+
+        const topBlocks = candidateBlocks.slice(0, targetBlocks);
 
         if (topBlocks.length > 0) {
           autoSelectMultipleBlocks(topBlocks);
+        } else {
+          console.log(`⚠️ No blocks meet selection criteria this round`);
         }
       } else {
         // Single block mode (original behavior)

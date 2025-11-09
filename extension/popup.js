@@ -6,19 +6,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   const settings = await chrome.storage.sync.get({
     maxBlocks: 13,
     autoSelect: false,
-    multiBlock: true
+    multiBlock: true,
+    budgetLimit: null,
+    smartSelection: true,
+    adaptiveMode: true
   });
 
   // Update UI with saved settings
   document.getElementById('max-blocks').value = settings.maxBlocks;
   document.getElementById('auto-select').checked = settings.autoSelect;
   document.getElementById('multi-block').checked = settings.multiBlock;
+  document.getElementById('budget-limit').value = settings.budgetLimit || 0;
+  document.getElementById('smart-selection').checked = settings.smartSelection !== false;
+  document.getElementById('adaptive-mode').checked = settings.adaptiveMode !== false;
 
   updateDisplayValues(settings.maxBlocks);
+  updateBudgetDisplay(settings.budgetLimit || 0);
 
   // Add event listeners
   document.getElementById('max-blocks').addEventListener('input', (e) => {
     updateDisplayValues(parseInt(e.target.value));
+  });
+
+  document.getElementById('budget-limit').addEventListener('input', (e) => {
+    updateBudgetDisplay(parseFloat(e.target.value));
   });
 
   document.getElementById('apply-settings').addEventListener('click', applySettings);
@@ -39,16 +50,32 @@ function updateDisplayValues(blocks) {
   document.querySelector('.stats-row:nth-child(2) .stats-value').textContent = expectedWinsText;
 }
 
+function updateBudgetDisplay(budget) {
+  const budgetValue = parseFloat(budget);
+  if (budgetValue === 0 || budgetValue === null) {
+    document.getElementById('budget-value').textContent = 'Unlimited';
+    document.getElementById('budget-display').textContent = '∞';
+  } else {
+    document.getElementById('budget-value').textContent = `${budgetValue.toFixed(1)} SOL`;
+    document.getElementById('budget-display').textContent = `${budgetValue.toFixed(1)} SOL`;
+  }
+}
+
 function setPreset(blocks) {
   document.getElementById('max-blocks').value = blocks;
   updateDisplayValues(blocks);
 }
 
 async function applySettings() {
+  const budgetValue = parseFloat(document.getElementById('budget-limit').value);
+
   const settings = {
     maxBlocks: parseInt(document.getElementById('max-blocks').value),
     autoSelect: document.getElementById('auto-select').checked,
-    multiBlock: document.getElementById('multi-block').checked
+    multiBlock: document.getElementById('multi-block').checked,
+    budgetLimit: budgetValue > 0 ? budgetValue : null,
+    smartSelection: document.getElementById('smart-selection').checked,
+    adaptiveMode: document.getElementById('adaptive-mode').checked
   };
 
   // Save to storage
