@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "ORE EV Calculator",
+  "version": "1.0.0",
+  "description": "Advanced EV calculator for ORE mining with 52% win rate, real-time tracking, and performance analytics",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://ore.supply/*",
+    "https://api.dexscreener.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://ore.supply/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

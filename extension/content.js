@@ -39,6 +39,49 @@
     adaptiveMode: true        // Auto-adjust block count based on quality
   };
 
+  // Load settings from Chrome extension storage
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    chrome.storage.sync.get({
+      maxBlocks: 13,
+      autoSelect: false,
+      multiBlock: true,
+      budgetLimit: null,
+      smartSelection: true,
+      minEVThreshold: 0.01,
+      minEVPercentage: 0.02,
+      adaptiveMode: true
+    }, (settings) => {
+      MULTI_BLOCK_CONFIG.maxBlocks = settings.maxBlocks;
+      MULTI_BLOCK_CONFIG.enabled = settings.multiBlock;
+      MULTI_BLOCK_CONFIG.budgetLimit = settings.budgetLimit;
+      MULTI_BLOCK_CONFIG.smartSelection = settings.smartSelection !== false;
+      MULTI_BLOCK_CONFIG.minEVThreshold = settings.minEVThreshold || 0.01;
+      MULTI_BLOCK_CONFIG.minEVPercentage = settings.minEVPercentage || 0.02;
+      MULTI_BLOCK_CONFIG.adaptiveMode = settings.adaptiveMode !== false;
+      autoSelectEnabled = settings.autoSelect;
+      console.log('🔧 Extension settings loaded:', settings);
+      setTimeout(() => updateToggleButton(), 1000);
+    });
+
+    // Listen for settings updates from extension popup
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (request.type === 'UPDATE_SETTINGS') {
+        MULTI_BLOCK_CONFIG.maxBlocks = request.settings.maxBlocks;
+        MULTI_BLOCK_CONFIG.enabled = request.settings.multiBlock;
+        MULTI_BLOCK_CONFIG.budgetLimit = request.settings.budgetLimit;
+        MULTI_BLOCK_CONFIG.smartSelection = request.settings.smartSelection !== false;
+        MULTI_BLOCK_CONFIG.minEVThreshold = request.settings.minEVThreshold || 0.01;
+        MULTI_BLOCK_CONFIG.minEVPercentage = request.settings.minEVPercentage || 0.02;
+        MULTI_BLOCK_CONFIG.adaptiveMode = request.settings.adaptiveMode !== false;
+        autoSelectEnabled = request.settings.autoSelect;
+        console.log('🔧 Settings updated from extension:', request.settings);
+        updateToggleButton();
+        sendResponse({ success: true });
+      }
+      return true;
+    });
+  }
+
   // ---------- Historical Data Tracking ----------
   const historicalData = {
     blockWins: new Array(25).fill(0),  // Track wins per block position (0-24)
